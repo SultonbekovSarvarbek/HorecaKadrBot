@@ -1,4 +1,4 @@
-"""Точка входа: сборка бота, запуск polling, graceful shutdown."""
+"""Точка входа: сборка бота «Ченсон», запуск polling, graceful shutdown."""
 import asyncio
 import logging
 
@@ -11,9 +11,18 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import load_config
 from db import create_engine_and_session, init_db
-from handlers import admin, candidate
+from db.seed import seed_db
+from handlers import (
+    admin_users,
+    candidate,
+    common,
+    manager,
+    recruiter_candidates,
+    recruiter_vacancies,
+    reports,
+)
 from middlewares import AntiFloodMiddleware, DbSessionMiddleware, LoggingMiddleware
-from services.scheduler import restore_pending_reminders
+from services.scheduler import setup_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,29 +36,31 @@ async def main() -> None:
 
     engine, session_factory = create_engine_and_session(config.database_url)
     await init_db(engine)
+    await seed_db(session_factory, config)
 
     bot = Bot(
         token=config.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher(storage=MemoryStorage())
-
-    # доступно в хендлерах по имени аргумента
     dp["config"] = config
     dp["session_factory"] = session_factory
 
     scheduler = AsyncIOScheduler(timezone=str(config.timezone))
     dp["scheduler"] = scheduler
 
-    # middlewares (порядок: антифлуд → логирование → сессия БД)
     for observer in (dp.message, dp.callback_query):
         observer.middleware(AntiFloodMiddleware(rate_limit=0.5))
         observer.middleware(LoggingMiddleware())
         observer.middleware(DbSessionMiddleware(session_factory))
 
-    # admin-роутер первым: его фильтр пропускает только админов,
-    # остальные апдейты уходят в candidate-роутер
-    dp.include_router(admin.router)
+    # порядок: ролевые роутеры → /start → кандидат (его catch-all последним)
+    dp.include_router(admin_users.router)
+    dp.include_router(recruiter_vacancies.router)
+    dp.include_router(recruiter_candidates.router)
+    dp.include_router(reports.router)
+    dp.include_router(manager.router)
+    dp.include_router(common.router)
     dp.include_router(candidate.router)
 
     @dp.errors()
@@ -60,12 +71,12 @@ async def main() -> None:
             event.exception,
         )
 
+    setup_scheduler(scheduler, bot, session_factory)
     scheduler.start()
-    await restore_pending_reminders(scheduler, bot, session_factory)
 
-    logger.info("Бот запускается…")
+    logger.info("Бот «Ченсон» запускается…")
     try:
-        # не сбрасываем очередь: заявки, отправленные пока бот лежал, обработаются
+        # не сбрасываем очередь: заявки за время даунтайма обработаются
         await bot.delete_webhook(drop_pending_updates=False)
         await dp.start_polling(bot)
     finally:

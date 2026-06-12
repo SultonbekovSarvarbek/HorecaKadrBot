@@ -1,83 +1,94 @@
-"""Напоминания о собеседованиях через APScheduler (за 3 часа до начала)."""
+"""Еженедельная сверка: каждый понедельник 10:00 — чеклист рекрутерам."""
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
+from html import escape
 
 from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import texts
-from db.repository import InterviewRepository
+from db.models import CandidateStatus
+from db.repository import ReportRepo, VacancyRepo
+from services.notify import notify_recruiters
 from utils.timeutil import now_local
 
 logger = logging.getLogger("bot.scheduler")
 
-REMIND_BEFORE = timedelta(hours=3)
+
+async def build_weekly_checkin(session: AsyncSession) -> str:
+    now = now_local()
+    week_ago = now - timedelta(days=7)
+    parts = [texts.WEEKLY_CHECKIN_TITLE]
+
+    vac_repo = VacancyRepo(session)
+    vacancies = await vac_repo.open_vacancies()
+    if vacancies:
+        hired = await vac_repo.hired_counts([v.id for v in vacancies])
+        lines = "\n".join(
+            f"• #{v.id} {texts.POSITION_LABELS[v.position]} · {escape(v.branch.name)} "
+            f"({hired.get(v.id, 0)}/{v.quota})"
+            for v in vacancies
+        )
+        parts.append(texts.WEEKLY_VACANCIES.format(lines=lines))
+    else:
+        parts.append(texts.WEEKLY_NO_VACANCIES)
+
+    report = ReportRepo(session)
+    hired_week = await report.status_changed_between(CandidateStatus.HIRED, week_ago, now)
+    if hired_week:
+        lines = "\n".join(
+            f"• #{c.id} {escape(c.full_name)} — {texts.POSITION_LABELS[c.vacancy.position]} "
+            f"({escape(c.vacancy.branch.name)})"
+            for c in hired_week
+        )
+        parts.append(texts.WEEKLY_HIRED.format(lines=lines))
+    else:
+        parts.append(texts.WEEKLY_NO_HIRED)
+
+    failed = await report.status_changed_between(
+        CandidateStatus.INTERNSHIP_FAILED, week_ago, now
+    )
+    if failed:
+        lines = "\n".join(
+            f"• #{c.id} {escape(c.full_name)}"
+            + (f" — {escape(c.status_reason)}" if c.status_reason else "")
+            for c in failed
+        )
+        parts.append(texts.WEEKLY_INTERNSHIP_FAILED.format(lines=lines))
+
+    rejections = await report.rejection_reasons_between(week_ago, now)
+    lines = "\n".join(
+        f"• {texts.REJECTION_LABELS[r]}: {cnt}"
+        for r, cnt in sorted(rejections.items(), key=lambda x: -x[1])
+    ) or "• —"
+    parts.append(texts.WEEKLY_REJECTIONS.format(lines=lines))
+
+    return "".join(parts)
 
 
-async def send_interview_reminder(
-    bot: Bot,
-    session_factory: async_sessionmaker[AsyncSession],
-    interview_id: int,
+async def send_weekly_checkin(
+    bot: Bot, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     async with session_factory() as session:
-        repo = InterviewRepository(session)
-        interview = await repo.get_by_id(interview_id)
-        if interview is None or interview.reminded:
-            return
-        candidate = await interview.awaitable_attrs.candidate
-        try:
-            await bot.send_message(
-                candidate.tg_id,
-                texts.INTERVIEW_REMINDER.format(dt=f"{interview.datetime:%H:%M}"),
-            )
-            await repo.mark_reminded(interview_id)
-        except Exception as e:  # noqa: BLE001
-            # reminded не ставим — после рестарта бота будет ещё попытка
-            logger.warning(
-                "Не удалось отправить напоминание кандидату %s: %s", candidate.tg_id, e
-            )
+        text = await build_weekly_checkin(session)
+        await notify_recruiters(bot, session, text)
+    logger.info("Еженедельная сверка отправлена рекрутерам")
 
 
-def schedule_reminder(
+def setup_scheduler(
     scheduler: AsyncIOScheduler,
     bot: Bot,
     session_factory: async_sessionmaker[AsyncSession],
-    interview_id: int,
-    interview_dt: datetime,
 ) -> None:
-    """Ставит задачу-напоминание за 3 часа до собеседования.
-
-    Если до собеседования меньше 3 часов — напоминание уйдёт почти сразу.
-    """
-    run_at = interview_dt - REMIND_BEFORE
-    now = now_local()
-    if run_at <= now:
-        run_at = now + timedelta(seconds=10)
     scheduler.add_job(
-        send_interview_reminder,
-        trigger="date",
-        run_date=run_at,
-        args=[bot, session_factory, interview_id],
-        id=f"interview_reminder_{interview_id}",
+        send_weekly_checkin,
+        trigger="cron",
+        day_of_week="mon",
+        hour=10,
+        minute=0,
+        args=[bot, session_factory],
+        id="weekly_checkin",
         replace_existing=True,
         misfire_grace_time=3600,
     )
-    logger.info(
-        "Напоминание по собеседованию #%s запланировано на %s", interview_id, run_at
-    )
-
-
-async def restore_pending_reminders(
-    scheduler: AsyncIOScheduler,
-    bot: Bot,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """После рестарта бота восстанавливает напоминания из БД."""
-    async with session_factory() as session:
-        repo = InterviewRepository(session)
-        pending = await repo.get_pending_reminders(now_local())
-    for interview in pending:
-        schedule_reminder(scheduler, bot, session_factory, interview.id, interview.datetime)
-    if pending:
-        logger.info("Восстановлено напоминаний: %d", len(pending))

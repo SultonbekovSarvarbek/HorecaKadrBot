@@ -1,11 +1,36 @@
-"""Конфигурация приложения: всё читается из .env."""
+"""Конфигурация: .env + дефолтные пороги скрининга.
+
+Пороги можно переопределить в БД (таблица Settings) без правки кода:
+значение из Settings имеет приоритет над DEFAULT_SETTINGS.
+"""
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ── Дефолтные настройки (переопределяются в таблице Settings) ────────
+DEFAULT_SETTINGS: dict[str, str] = {
+    # Официант
+    "waiter_age_min": "18",
+    "waiter_age_max": "30",
+    # Бармен (отдельный блок, по умолчанию = правила официанта)
+    "bartender_age_min": "18",
+    "bartender_age_max": "30",
+    # Техперсонал (отдельный блок)
+    "tech_age_min": "18",
+    "tech_age_max": "30",
+    # Повар
+    "cook_age_min": "25",
+    "cook_age_max": "50",
+    "cook_age_max_female": "55",
+    "cook_min_exp_years": "3",
+    # Чаты и ссылки
+    "kitchen_chat_id": "",          # chat_id чата «Кухня» (для поваров)
+    "drive_link": "",               # ссылка на Google Drive с медиа для вакансий
+}
 
 
 @dataclass(frozen=True)
@@ -13,7 +38,7 @@ class Config:
     bot_token: str
     admin_ids: tuple[int, ...]
     database_url: str
-    timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo("Asia/Tashkent"))
+    timezone: ZoneInfo
 
 
 def load_config() -> Config:
