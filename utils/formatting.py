@@ -10,8 +10,8 @@ def candidate_card(c: Candidate) -> str:
     source = escape(c.source) if c.source else "—"
     return (
         f"👤 <b>{escape(c.name)}</b> (#{c.id})\n"
-        f"Вакансия: {texts.VACANCY_LABELS[c.vacancy]}\n"
-        f"Статус: {texts.STATUS_LABELS[c.status]}\n\n"
+        f"Вакансия: {texts.VACANCY_LABELS.get(c.vacancy, c.vacancy.value)}\n"
+        f"Статус: {texts.STATUS_LABELS.get(c.status, c.status.value)}\n\n"
         f"Возраст: {c.age}\n"
         f"Телефон: {escape(c.phone)}\n"
         f"Район: {escape(c.district)}\n"

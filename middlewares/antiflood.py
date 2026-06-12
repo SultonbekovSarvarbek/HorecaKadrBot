@@ -30,4 +30,10 @@ class AntiFloodMiddleware(BaseMiddleware):
                 self._last_seen = {
                     uid: ts for uid, ts in self._last_seen.items() if ts > cutoff
                 }
+                # жёсткий потолок на случай >10k активных за минуту
+                if len(self._last_seen) > 10_000:
+                    newest = sorted(
+                        self._last_seen.items(), key=lambda kv: kv[1], reverse=True
+                    )[:10_000]
+                    self._last_seen = dict(newest)
         return await handler(event, data)

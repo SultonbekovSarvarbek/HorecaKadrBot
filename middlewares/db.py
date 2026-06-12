@@ -7,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 class DbSessionMiddleware(BaseMiddleware):
+    """Кладёт AsyncSession в data['session'] на время обработки апдейта.
+
+    Автокоммита нет: хендлер (или репозиторий) обязан сам вызвать
+    session.commit(). При исключении сессия откатывается автоматически.
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
 

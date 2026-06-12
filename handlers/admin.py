@@ -1,7 +1,7 @@
 """Админ-панель: списки кандидатов, карточки, статусы, собеседования, аналитика, Excel."""
 import logging
 import math
-from datetime import datetime
+from html import escape
 
 from aiogram import Bot, F, Router
 from aiogram.filters import BaseFilter, Command
@@ -20,6 +20,7 @@ from services.analytics import build_analytics_text
 from services.excel import export_candidates_xlsx
 from services.scheduler import schedule_reminder
 from utils.formatting import candidate_card
+from utils.timeutil import now_local
 from utils.validators import parse_interview_datetime
 
 logger = logging.getLogger("bot.admin")
@@ -198,7 +199,7 @@ async def send_message_to_candidate(
         return
     try:
         await bot.send_message(
-            candidate.tg_id, texts.HR_MESSAGE_PREFIX + message.text
+            candidate.tg_id, texts.HR_MESSAGE_PREFIX + escape(message.text)
         )
         await message.answer(texts.MESSAGE_SENT)
     except Exception as e:  # noqa: BLE001
@@ -225,7 +226,7 @@ async def schedule_interview(
     scheduler: AsyncIOScheduler,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    dt = parse_interview_datetime(message.text, datetime.now())
+    dt = parse_interview_datetime(message.text, now_local())
     if dt is None:
         await message.answer(texts.INVALID_INTERVIEW_DT)
         return
@@ -258,7 +259,7 @@ async def schedule_interview(
 @router.callback_query(F.data == "adm:analytics")
 async def cb_analytics(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.answer()
-    text = await build_analytics_text(session, datetime.now())
+    text = await build_analytics_text(session, now_local())
     await callback.message.edit_text(text, reply_markup=kb.menu_kb())
 
 
@@ -273,7 +274,7 @@ async def cb_export(callback: CallbackQuery, session: AsyncSession) -> None:
         return
     content = export_candidates_xlsx(candidates)
     file = BufferedInputFile(
-        content, filename=f"candidates_{datetime.now():%Y%m%d_%H%M}.xlsx"
+        content, filename=f"candidates_{now_local():%Y%m%d_%H%M}.xlsx"
     )
     await callback.message.answer_document(
         file, caption=texts.EXPORT_CAPTION.format(count=len(candidates))

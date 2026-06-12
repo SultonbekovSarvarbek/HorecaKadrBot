@@ -22,15 +22,26 @@ def load_config() -> Config:
         raise RuntimeError("BOT_TOKEN не задан в .env")
 
     raw_admins = os.getenv("ADMIN_IDS", "").strip()
-    admin_ids = tuple(
-        int(part) for part in raw_admins.split(",") if part.strip().isdigit()
-    )
+    parts = [p.strip() for p in raw_admins.split(",") if p.strip()]
+    invalid = [p for p in parts if not p.isdigit()]
+    if invalid:
+        raise RuntimeError(
+            f"ADMIN_IDS содержит некорректные значения: {invalid} "
+            "(нужны числовые user_id через запятую)"
+        )
+    admin_ids = tuple(int(p) for p in parts)
     if not admin_ids:
         raise RuntimeError("ADMIN_IDS не задан в .env (список user_id через запятую)")
+
+    tz_name = os.getenv("TIMEZONE", "Asia/Tashkent")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception as e:
+        raise RuntimeError(f"Недопустимый часовой пояс в TIMEZONE: {tz_name!r}") from e
 
     return Config(
         bot_token=token,
         admin_ids=admin_ids,
         database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///bot.db"),
-        timezone=ZoneInfo(os.getenv("TIMEZONE", "Asia/Tashkent")),
+        timezone=tz,
     )

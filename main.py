@@ -65,7 +65,8 @@ async def main() -> None:
 
     logger.info("Бот запускается…")
     try:
-        await bot.delete_webhook(drop_pending_updates=True)
+        # не сбрасываем очередь: заявки, отправленные пока бот лежал, обработаются
+        await bot.delete_webhook(drop_pending_updates=False)
         await dp.start_polling(bot)
     finally:
         logger.info("Останавливаюсь…")

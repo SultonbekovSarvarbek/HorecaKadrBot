@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import texts
 from db.repository import InterviewRepository
+from utils.timeutil import now_local
 
 logger = logging.getLogger("bot.scheduler")
 
@@ -30,11 +31,12 @@ async def send_interview_reminder(
                 candidate.tg_id,
                 texts.INTERVIEW_REMINDER.format(dt=f"{interview.datetime:%H:%M}"),
             )
+            await repo.mark_reminded(interview_id)
         except Exception as e:  # noqa: BLE001
+            # reminded не ставим — после рестарта бота будет ещё попытка
             logger.warning(
                 "Не удалось отправить напоминание кандидату %s: %s", candidate.tg_id, e
             )
-        await repo.mark_reminded(interview_id)
 
 
 def schedule_reminder(
@@ -49,7 +51,7 @@ def schedule_reminder(
     Если до собеседования меньше 3 часов — напоминание уйдёт почти сразу.
     """
     run_at = interview_dt - REMIND_BEFORE
-    now = datetime.now()
+    now = now_local()
     if run_at <= now:
         run_at = now + timedelta(seconds=10)
     scheduler.add_job(
@@ -74,7 +76,7 @@ async def restore_pending_reminders(
     """После рестарта бота восстанавливает напоминания из БД."""
     async with session_factory() as session:
         repo = InterviewRepository(session)
-        pending = await repo.get_pending_reminders(datetime.now())
+        pending = await repo.get_pending_reminders(now_local())
     for interview in pending:
         schedule_reminder(scheduler, bot, session_factory, interview.id, interview.datetime)
     if pending:

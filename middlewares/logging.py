@@ -16,10 +16,13 @@ class LoggingMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         if isinstance(event, Message):
+            # текст не логируем: в анкете персональные данные (имя, телефон)
+            text = event.text or ""
+            label = text.split()[0] if text.startswith("/") else event.content_type
             logger.info(
-                "message from=%s text=%r",
+                "message from=%s type=%s",
                 event.from_user.id if event.from_user else "?",
-                (event.text or event.content_type)[:100],
+                label,
             )
         elif isinstance(event, CallbackQuery):
             logger.info(

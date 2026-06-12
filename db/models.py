@@ -5,15 +5,17 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
     String,
-    func,
 )
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from utils.timeutil import now_local
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -57,6 +59,9 @@ TERMINAL_STATUSES: frozenset[CandidateStatus] = frozenset(
 
 class Candidate(Base):
     __tablename__ = "candidates"
+    __table_args__ = (
+        CheckConstraint("age >= 16 AND age <= 65", name="ck_candidates_age_range"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
@@ -73,11 +78,9 @@ class Candidate(Base):
         Enum(CandidateStatus), default=CandidateStatus.NEW, index=True
     )
     source: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime, default=now_local, onupdate=now_local
     )
 
     interviews: Mapped[list["Interview"]] = relationship(
@@ -112,6 +115,6 @@ class StatusLog(Base):
         Enum(CandidateStatus), nullable=True
     )
     new_status: Mapped[CandidateStatus] = mapped_column(Enum(CandidateStatus))
-    changed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
 
     candidate: Mapped[Candidate] = relationship(back_populates="status_logs")

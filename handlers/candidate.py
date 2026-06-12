@@ -30,6 +30,15 @@ class Form(StatesGroup):
     start_when = State()
 
 
+def _parse_index(data: str, options_len: int) -> int | None:
+    """Безопасно достаёт индекс из callback-данных вида 'prefix:N'."""
+    try:
+        idx = int(data.split(":", 1)[1])
+    except (IndexError, ValueError):
+        return None
+    return idx if 0 <= idx < options_len else None
+
+
 # Порядок шагов для кнопки «Назад»
 STEP_ORDER = [
     Form.name,
@@ -107,7 +116,11 @@ async def vacancy_chosen(
         await callback.message.edit_text(texts.ALREADY_APPLIED)
         return
 
-    vacancy = Vacancy(callback.data.split(":", 1)[1])
+    try:
+        vacancy = Vacancy(callback.data.split(":", 1)[1])
+    except ValueError:
+        await callback.answer()
+        return
     await state.update_data(vacancy=vacancy.value)
     await callback.answer()
     await callback.message.edit_text(
@@ -185,8 +198,8 @@ async def step_phone_text(message: Message, state: FSMContext) -> None:
 # ── Шаг 4: район ─────────────────────────────────────────────────────
 @router.callback_query(Form.district, F.data.startswith("district:"))
 async def step_district(callback: CallbackQuery, state: FSMContext) -> None:
-    idx = int(callback.data.split(":", 1)[1])
-    if not 0 <= idx < len(texts.DISTRICTS):
+    idx = _parse_index(callback.data, len(texts.DISTRICTS))
+    if idx is None:
         await callback.answer()
         return
     await state.update_data(district=texts.DISTRICTS[idx])
@@ -202,8 +215,8 @@ async def district_text_fallback(message: Message) -> None:
 # ── Шаг 5: опыт ──────────────────────────────────────────────────────
 @router.callback_query(Form.experience, F.data.startswith("exp:"))
 async def step_experience(callback: CallbackQuery, state: FSMContext) -> None:
-    idx = int(callback.data.split(":", 1)[1])
-    if not 0 <= idx < len(texts.EXPERIENCE_OPTIONS):
+    idx = _parse_index(callback.data, len(texts.EXPERIENCE_OPTIONS))
+    if idx is None:
         await callback.answer()
         return
     await state.update_data(experience=texts.EXPERIENCE_OPTIONS[idx])
@@ -239,13 +252,19 @@ async def step_start_when(
     bot: Bot,
     config: Config,
 ) -> None:
-    idx = int(callback.data.split(":", 1)[1])
-    if not 0 <= idx < len(texts.START_WHEN_OPTIONS):
+    idx = _parse_index(callback.data, len(texts.START_WHEN_OPTIONS))
+    if idx is None:
         await callback.answer()
         return
     await callback.answer()
     data = await state.get_data()
     await state.clear()
+
+    # защита от устаревшего состояния (рестарт бота посреди анкеты)
+    required = {"vacancy", "name", "age", "phone", "district", "experience", "schedule_ok"}
+    if not required.issubset(data):
+        await callback.message.answer(texts.FORM_EXPIRED)
+        return
 
     # Авто-скрининг: младше 18 или не готов к графику → отказ
     passed = data["age"] >= 18 and data["schedule_ok"]
@@ -278,3 +297,10 @@ async def step_start_when(
 @router.message(Form.start_when)
 async def start_when_text_fallback(message: Message) -> None:
     await message.answer(texts.USE_BUTTONS, reply_markup=kb.start_when_kb())
+
+
+# ── Устаревшие inline-кнопки (после рестарта/завершения анкеты) ──────
+@router.callback_query()
+async def stale_callback(callback: CallbackQuery) -> None:
+    # снимает «часики» с кнопок, по которым уже нет активного шага
+    await callback.answer()
