@@ -1,0 +1,22 @@
+[Unit]
+Description=HorecaKadr Telegram Bot (подбор персонала)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botuser
+WorkingDirectory=/opt/horecakadr-bot
+ExecStart=/opt/horecakadr-bot/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+# безопасность
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/horecakadr-bot
+
+[Install]
+WantedBy=multi-user.target
