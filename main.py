@@ -49,10 +49,13 @@ async def main() -> None:
     scheduler = AsyncIOScheduler(timezone=str(config.timezone))
     dp["scheduler"] = scheduler
 
+    # ВАЖНО: outer_middleware — сессия БД нужна уже на этапе фильтров
+    # (RoleFilter читает таблицу Users), а inner-middleware срабатывает
+    # только после прохождения фильтров.
     for observer in (dp.message, dp.callback_query):
-        observer.middleware(AntiFloodMiddleware(rate_limit=0.5))
-        observer.middleware(LoggingMiddleware())
-        observer.middleware(DbSessionMiddleware(session_factory))
+        observer.outer_middleware(AntiFloodMiddleware(rate_limit=0.5))
+        observer.outer_middleware(LoggingMiddleware())
+        observer.outer_middleware(DbSessionMiddleware(session_factory))
 
     # порядок: ролевые роутеры → /start → кандидат (его catch-all последним)
     dp.include_router(admin_users.router)
