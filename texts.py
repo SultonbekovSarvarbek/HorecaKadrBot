@@ -259,7 +259,7 @@ TEMPLATE_VACANCY = (
     "👉 Откликнуться: напишите нашему боту @{bot_username}"
 )
 TEMPLATES_DRIVE = "\n📁 Медиа для публикаций: {link}"
-TEMPLATES_NO_DRIVE = "\n(ссылка на Google Drive не настроена — /set_setting drive_link <url>)"
+TEMPLATES_NO_DRIVE = "\n(ссылка на Google Drive не настроена — /set_setting drive_link &lt;url&gt;)"
 
 # ── Кандидаты (управление) ───────────────────────────────────────────
 CAND_LIST_TITLE = "👥 <b>Кандидаты</b> (стр. {page}/{pages}, всего {total})"
@@ -276,7 +276,7 @@ STATUS_CHANGE_FOR_RECRUITER = (
     "ℹ️ {who} изменил статус кандидата #{id} {name}: {old} → {new}{reason}"
 )
 CANDIDATE_NOT_FOUND = "Кандидат не найден."
-CAND_USAGE = "Использование: /candidate <id>"
+CAND_USAGE = "Использование: /candidate &lt;id&gt;"
 MANAGER_STATUS_BUTTONS_HINT = "Доступные действия:"
 
 # ── Отчёты ───────────────────────────────────────────────────────────
