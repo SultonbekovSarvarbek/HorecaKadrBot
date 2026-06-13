@@ -81,6 +81,9 @@ async def cmd_bind_chat(
     if not arg:
         await message.answer(texts.BIND_CHAT_USAGE)
         return
+    if message.chat.type == "private":
+        await message.answer(texts.BIND_CHAT_PRIVATE)
+        return
     chat_id = message.chat.id
     if arg.lower() == "kitchen":
         await SettingsRepo(session).set("kitchen_chat_id", str(chat_id))
@@ -115,6 +118,11 @@ async def cmd_set_setting(
     key, value = args[0].strip(), args[1].strip()
     if key not in DEFAULT_SETTINGS:
         await message.answer(texts.UNKNOWN_SETTING)
+        return
+    # числовые пороги (дефолт-значение — число) обязаны быть числом,
+    # иначе они молча игнорируются при чтении через get_int
+    if DEFAULT_SETTINGS[key].isdigit() and not value.isdigit():
+        await message.answer(texts.SETTING_NOT_NUMBER.format(key=key))
         return
     await SettingsRepo(session).set(key, value)
     await AuditRepo(session).log(

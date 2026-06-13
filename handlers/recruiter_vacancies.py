@@ -225,6 +225,7 @@ async def sr_clarify_start(callback: CallbackQuery, state: FSMContext) -> None:
     raw = callback.data.split(":")[2]
     if not raw.isdigit():
         return
+    await state.clear()
     await state.set_state(ClarifyForm.text)
     await state.update_data(staff_request_id=int(raw))
     await callback.message.answer(texts.SR_CLARIFY_ASK)

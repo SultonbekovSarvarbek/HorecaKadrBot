@@ -362,13 +362,26 @@ class ReportRepo:
                 "rejections": {}, "sources": {}, "candidate_ids": [],
             }
 
-        # достигнутые этапы — по StatusLog
-        stmt = (
-            select(StatusLog.new_status, func.count(func.distinct(StatusLog.candidate_id)))
+        # достигнутые этапы — по StatusLog, НАКОПИТЕЛЬНО: кандидат засчитан
+        # на этап, если он достиг этого статуса ИЛИ любого последующего
+        # (иначе пропуск промежуточного статуса ломает проценты воронки).
+        pair_stmt = (
+            select(StatusLog.candidate_id, StatusLog.new_status)
             .where(StatusLog.candidate_id.in_(ids))
-            .group_by(StatusLog.new_status)
+            .distinct()
         )
-        reach = {st: cnt for st, cnt in (await self.session.execute(stmt)).all()}
+        by_cand: dict[int, set] = {}
+        for cid, st in (await self.session.execute(pair_stmt)).all():
+            by_cand.setdefault(cid, set()).add(st)
+
+        def reached(stage_and_later: set) -> int:
+            return sum(1 for sts in by_cand.values() if sts & stage_and_later)
+
+        S = CandidateStatus
+        screened = reached({S.INVITED, S.CAME, S.INTERNSHIP, S.HIRED})
+        came = reached({S.CAME, S.INTERNSHIP, S.HIRED})
+        internship = reached({S.INTERNSHIP, S.HIRED})
+        hired = reached({S.HIRED})
 
         rej_stmt = (
             select(Candidate.rejection_reason, func.count(Candidate.id))
@@ -393,10 +406,10 @@ class ReportRepo:
 
         return {
             "applied": len(ids),
-            "screened": reach.get(CandidateStatus.INVITED, 0),
-            "came": reach.get(CandidateStatus.CAME, 0),
-            "internship": reach.get(CandidateStatus.INTERNSHIP, 0),
-            "hired": reach.get(CandidateStatus.HIRED, 0),
+            "screened": screened,
+            "came": came,
+            "internship": internship,
+            "hired": hired,
             "rejections": rejections,
             "sources": sources,
             "candidate_ids": ids,

@@ -1,4 +1,6 @@
 """/start: определение роли по whitelist и показ нужного меню."""
+from html import escape
+
 from aiogram import Router
 from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -35,7 +37,7 @@ async def cmd_start(
     if user.role == Role.BRANCH_MANAGER:
         branch_name = user.branch.name if user.branch else "—"
         await message.answer(
-            texts.MANAGER_MENU.format(branch=branch_name),
+            texts.MANAGER_MENU.format(branch=escape(branch_name)),
             reply_markup=manager_menu_kb(),
         )
     elif user.role == Role.CHEF:
