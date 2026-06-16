@@ -16,12 +16,18 @@ from handlers import (
     admin_users,
     candidate,
     common,
+    maintenance,
     manager,
     recruiter_candidates,
     recruiter_vacancies,
     reports,
 )
-from middlewares import AntiFloodMiddleware, DbSessionMiddleware, LoggingMiddleware
+from middlewares import (
+    AntiFloodMiddleware,
+    DbSessionMiddleware,
+    LoggingMiddleware,
+    MaintenanceMiddleware,
+)
 from services.scheduler import setup_scheduler
 
 logging.basicConfig(
@@ -56,8 +62,12 @@ async def main() -> None:
         observer.outer_middleware(AntiFloodMiddleware(rate_limit=0.5))
         observer.outer_middleware(LoggingMiddleware())
         observer.outer_middleware(DbSessionMiddleware(session_factory))
+        # после DbSession: заглушке нужна сессия, чтобы прочитать флаг
+        observer.outer_middleware(MaintenanceMiddleware())
 
-    # порядок: ролевые роутеры → /start → кандидат (его catch-all последним)
+    # порядок: заглушка-команда владельца → ролевые роутеры →
+    # /start → кандидат (его catch-all последним)
+    dp.include_router(maintenance.router)
     dp.include_router(admin_users.router)
     dp.include_router(recruiter_vacancies.router)
     dp.include_router(recruiter_candidates.router)

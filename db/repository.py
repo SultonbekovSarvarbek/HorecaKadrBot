@@ -56,6 +56,13 @@ class SettingsRepo:
         merged.update({s.key: s.value for s in rows if s.value != ""})
         return merged
 
+    async def is_maintenance(self) -> bool:
+        """Включена ли заглушка (бот приостановлен)."""
+        return (await self.get("maintenance_mode")) == "1"
+
+    async def set_maintenance(self, on: bool) -> None:
+        await self.set("maintenance_mode", "1" if on else "")
+
 
 class UserRepo:
     def __init__(self, session: AsyncSession):

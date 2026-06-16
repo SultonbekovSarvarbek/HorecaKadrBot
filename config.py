@@ -30,6 +30,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # Чаты и ссылки
     "kitchen_chat_id": "",          # chat_id чата «Кухня» (для поваров)
     "drive_link": "",               # ссылка на Google Drive с медиа для вакансий
+    "maintenance_mode": "",         # "1" = заглушка включена (бот приостановлен), "" = выкл.
 }
 
 
