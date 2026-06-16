@@ -20,6 +20,15 @@ from config import Config
 from db.repository import SettingsRepo
 
 
+def _is_maintenance_cmd(message: Message) -> bool:
+    """True, если сообщение — команда /maintenance (с аргументом или @botname)."""
+    text = (message.text or "").strip()
+    if not text.startswith("/"):
+        return False
+    cmd = text.split()[0].split("@", 1)[0].lower()
+    return cmd == "/maintenance"
+
+
 class MaintenanceMiddleware(BaseMiddleware):
     async def __call__(
         self,
@@ -34,10 +43,15 @@ class MaintenanceMiddleware(BaseMiddleware):
         if not await SettingsRepo(session).is_maintenance():
             return await handler(event, data)
 
-        # Заглушка включена. Владелец из .env проходит — иначе её не выключить.
+        # Заглушка включена. Владелец из .env проходит ТОЛЬКО для команды
+        # /maintenance — иначе её было бы не выключить. Любое другое действие
+        # блокируется даже у владельца.
         config: Config | None = data.get("config")
         user = data.get("event_from_user")
-        if config is not None and user is not None and user.id in config.admin_ids:
+        is_owner = (
+            config is not None and user is not None and user.id in config.admin_ids
+        )
+        if is_owner and isinstance(event, Message) and _is_maintenance_cmd(event):
             return await handler(event, data)
 
         # Всех остальных блокируем с уведомлением.
