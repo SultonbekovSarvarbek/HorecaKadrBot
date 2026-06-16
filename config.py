@@ -30,7 +30,6 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # Чаты и ссылки
     "kitchen_chat_id": "",          # chat_id чата «Кухня» (для поваров)
     "drive_link": "",               # ссылка на Google Drive с медиа для вакансий
-    "maintenance_mode": "",         # "1" = заглушка включена (бот приостановлен), "" = выкл.
 }
 
 
@@ -40,6 +39,7 @@ class Config:
     admin_ids: tuple[int, ...]
     database_url: str
     timezone: ZoneInfo
+    maintenance: bool  # True = заглушка включена (бот приостановлен для всех)
 
 
 def load_config() -> Config:
@@ -65,9 +65,16 @@ def load_config() -> Config:
     except Exception as e:
         raise RuntimeError(f"Недопустимый часовой пояс в TIMEZONE: {tz_name!r}") from e
 
+    # Заглушка: MAINTENANCE_MODE=1 (или on/true/yes) в .env приостанавливает бота
+    # для всех. Выключить — убрать переменную или поставить 0, затем перезапуск.
+    maintenance = os.getenv("MAINTENANCE_MODE", "").strip().lower() in (
+        "1", "on", "true", "yes",
+    )
+
     return Config(
         bot_token=token,
         admin_ids=admin_ids,
         database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///bot.db"),
         timezone=tz,
+        maintenance=maintenance,
     )

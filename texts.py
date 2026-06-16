@@ -352,17 +352,3 @@ MAINTENANCE_NOTICE = (
     "ваши заявки за это время не теряются."
 )
 MAINTENANCE_NOTICE_SHORT = "🛠 Бот приостановлен. Попробуйте позже."
-MAINTENANCE_ENABLED = (
-    "🛠 <b>Заглушка включена.</b>\n"
-    "Все действия пользователей и сотрудников заблокированы.\n"
-    "Выключить: /maintenance off"
-)
-MAINTENANCE_DISABLED = "✅ <b>Заглушка выключена.</b> Бот работает в обычном режиме."
-MAINTENANCE_STATUS_ON = (
-    "🛠 Сейчас бот <b>приостановлен</b> (заглушка включена).\n"
-    "Выключить: /maintenance off"
-)
-MAINTENANCE_STATUS_OFF = (
-    "✅ Сейчас бот работает в обычном режиме.\n"
-    "Приостановить: /maintenance on"
-)

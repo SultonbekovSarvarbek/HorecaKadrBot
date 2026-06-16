@@ -16,7 +16,6 @@ from handlers import (
     admin_users,
     candidate,
     common,
-    maintenance,
     manager,
     recruiter_candidates,
     recruiter_vacancies,
@@ -62,12 +61,10 @@ async def main() -> None:
         observer.outer_middleware(AntiFloodMiddleware(rate_limit=0.5))
         observer.outer_middleware(LoggingMiddleware())
         observer.outer_middleware(DbSessionMiddleware(session_factory))
-        # после DbSession: заглушке нужна сессия, чтобы прочитать флаг
+        # заглушка (MAINTENANCE_MODE из .env) — блокирует всех, когда включена
         observer.outer_middleware(MaintenanceMiddleware())
 
-    # порядок: заглушка-команда владельца → ролевые роутеры →
-    # /start → кандидат (его catch-all последним)
-    dp.include_router(maintenance.router)
+    # порядок: ролевые роутеры → /start → кандидат (его catch-all последним)
     dp.include_router(admin_users.router)
     dp.include_router(recruiter_vacancies.router)
     dp.include_router(recruiter_candidates.router)
